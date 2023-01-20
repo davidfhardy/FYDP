@@ -35,6 +35,9 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+void osc_write_to_register(uint8_t REG, uint8_t VAL);
+void osc_read_register(uint8_t REG, char NAME[20]);
+void osc_init(void);
 
 /* USER CODE END PM */
 
@@ -45,11 +48,70 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
-//Oscillator SPI commands
+char spi_buf[20];
+int uart_buf_len;
+char uart_buf[50];
+
+/* Oscillator Registers ------------------------------------------------------*/
+
+// READ
+const uint8_t R_REG0 = 0b00000001;
+const uint8_t R_REG1 = 0b00000011;
+const uint8_t R_REG2 = 0b00000101;
 const uint8_t R_REG3 = 0b00000111;
+const uint8_t R_REG4 = 0b00001001;
+const uint8_t R_REG5 = 0b00001011;
+const uint8_t R_REG6 = 0b00001101;
 const uint8_t R_REG7 = 0b00001111;
+const uint8_t R_REG8 = 0b00010001;
+const uint8_t R_REG9 = 0b00010011;
+const uint8_t R_REGA = 0b00010101;
+const uint8_t R_REGB = 0b00010111;
+const uint8_t R_REGC = 0b00011001;
+const uint8_t R_REGD = 0b00011011;
+const uint8_t R_REGE = 0b00011111;
+
+// WRITE
+const uint8_t W_REG0 = 0b00000000;
+const uint8_t W_REG1 = 0b00000010;
+const uint8_t W_REG2 = 0b00000100;
+const uint8_t W_REG3 = 0b00000110;
+const uint8_t W_REG4 = 0b00001000;
+const uint8_t W_REG5 = 0b00001010;
+const uint8_t W_REG6 = 0b00001100;
 const uint8_t W_REG7 = 0b00001110;
-const uint8_t VAL = 78;
+const uint8_t W_REG8 = 0b00010000;
+const uint8_t W_REG9 = 0b00010010;
+const uint8_t W_REGA = 0b00010100;
+const uint8_t W_REGB = 0b00010110;
+const uint8_t W_REGC = 0b00011000;
+const uint8_t W_REGD = 0b00011010;
+const uint8_t W_REGE = 0b00011110;
+
+// Setting registers
+//const uint8_t VAL_REG2 = 0b00000100; // 4
+//const uint8_t VAL_REG4 = 0b01011110; //94
+//const uint8_t VAL_REG6 = 0x14;
+//const uint8_t VAL_REG7 = 81;
+//const uint8_t VAL_REG8 = 0x0A;
+//const uint8_t VAL_REG9 = 0x3D;
+//const uint8_t VAL_REGA = 0x70;
+//const uint8_t VAL_REGB = 26;
+//const uint8_t VAL_REGD = 0xE0;
+
+const uint8_t VAL_REG1 = 0x04;
+const uint8_t VAL_REG2 = 0x04;
+const uint8_t VAL_REG3 = 0x3F;
+const uint8_t VAL_REG4 = 0x57;
+const uint8_t VAL_REG5 = 0x11;
+const uint8_t VAL_REG6 = 0x18;
+const uint8_t VAL_REG7 = 40;
+const uint8_t VAL_REG8 = 0x3F;
+const uint8_t VAL_REG9 = 0xFF;
+const uint8_t VAL_REGA = 0xF0;
+const uint8_t VAL_REGB = 0x19;
+const uint8_t VAL_REGC = 0xBF;
+const uint8_t VAL_REGD = 0x00; //C0
 
 /* USER CODE END PV */
 
@@ -83,9 +145,9 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  char uart_buf[50];
-  int uart_buf_len;
-  char spi_buf[20];
+//  char uart_buf[50];
+//  int uart_buf_len;
+  // char spi_buf[20];
   for(int i=0; i<20; i++)
   {
 	  spi_buf[i] = 'a';
@@ -104,46 +166,90 @@ int main(void)
   MX_USART2_UART_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-  uart_buf_len = sprintf(uart_buf, "SPI Test\r\n");
+
+  uart_buf_len = sprintf(uart_buf, "========== Begin Running Code ==========\r\n");
   HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
-// read initial value
+  /* BEGIN OSCILLATOR SECTION -----------------------------------------------------*/
+   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET); // Should be high by default
+
+  uart_buf_len = sprintf(uart_buf, "/* Oscillator Code ---------*/ \r\n");
+  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+
+  // Set oscillator initial values
+  // osc_init();
+  osc_write_to_register(W_REG1, VAL_REG1);
+  osc_write_to_register(W_REG2, VAL_REG2);
+  osc_write_to_register(W_REG3, VAL_REG3);
+  osc_write_to_register(W_REG4, VAL_REG4);
+  osc_write_to_register(W_REG5, VAL_REG5);
+  osc_write_to_register(W_REG6, VAL_REG6);
+  osc_write_to_register(W_REG7, VAL_REG7);
+  osc_write_to_register(W_REG8, VAL_REG8);
+  osc_write_to_register(W_REG9, VAL_REG9);
+  osc_write_to_register(W_REGA, VAL_REGA);
+  osc_write_to_register(W_REGB, VAL_REGB);
+  osc_write_to_register(W_REGC, VAL_REGC);
+  osc_write_to_register(W_REGD, VAL_REGD);
+
+  // Read register values
+  osc_read_register(R_REG0, "REG0");
+  osc_read_register(R_REG1, "REG1");
+  osc_read_register(R_REG2, "REG2");
+  osc_read_register(R_REG3, "REG3");
+  osc_read_register(R_REG4, "REG4");
+  osc_read_register(R_REG5, "REG5");
+  osc_read_register(R_REG6, "REG6");
+  osc_read_register(R_REG7, "REG7");
+  osc_read_register(R_REG8, "REG8");
+  osc_read_register(R_REG9, "REG9");
+  osc_read_register(R_REGA, "REGA");
+  osc_read_register(R_REGB, "REGB");
+  osc_read_register(R_REGC, "REGC");
+  osc_read_register(R_REGD, "REGD");
+
+  uart_buf_len = sprintf(uart_buf, "=========== End Code Running ===========\r\n");
+  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+
+  /* END OSCILLATOR SECTION -----------------------------------------------------*/
+
+  /* Scratch Work ---------------------------------------------------------------*/
+  /*
+   // read initial value
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-  HAL_SPI_Transmit(&hspi1, (uint8_t *)&R_REG7, 1, 100);
+  HAL_SPI_Transmit(&hspi1, (uint8_t *)&R_REG2, 1, 100);
   HAL_SPI_Receive(&hspi1, (uint8_t *)spi_buf, 1, 100);
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
 
-  uart_buf_len = sprintf(uart_buf, "Value: 0x%02x\r\n", (unsigned int)spi_buf[0]);
+  uart_buf_len = sprintf(uart_buf, "REG2 Value: 0x%02x\r\n", (unsigned int)spi_buf[0]);
   HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
   uart_buf_len = sprintf(uart_buf, "SPI Test end\r\n");
   HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
   //write
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-  HAL_SPI_Transmit(&hspi1, (uint8_t *)&W_REG7, 1, 100);
-  HAL_SPI_Receive(&hspi1, (uint8_t *)&VAL, 1, 100);
+  HAL_SPI_Transmit(&hspi1, (uint8_t *)&W_REG2, 1, 100);
+  HAL_SPI_Transmit(&hspi1, (uint8_t *)&VAL_REG2, 1, 100);
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-
 
   //read changed value
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(&hspi1, (uint8_t *)&R_REG7, 1, 100);
-    HAL_SPI_Receive(&hspi1, (uint8_t *)spi_buf, 1, 100);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+  HAL_SPI_Transmit(&hspi1, (uint8_t *)&R_REG2, 1, 100);
+  HAL_SPI_Receive(&hspi1, (uint8_t *)spi_buf, 1, 100);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
 
-    uart_buf_len = sprintf(uart_buf, "Value: 0x%02x\r\n", (unsigned int)spi_buf[0]);
-    HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
-    uart_buf_len = sprintf(uart_buf, "SPI Test end\r\n");
-    HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+  uart_buf_len = sprintf(uart_buf, "REG2 Value: 0x%02x\r\n", (unsigned int)spi_buf[0]);
+  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+
+   */
+  /* End Scratch Work -----------------------------------------------------------*/
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_GPIO_TogglePin(GPIOA,GPIO_PIN_5);
-	  HAL_Delay(1000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -306,6 +412,57 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void osc_write_to_register(uint8_t REG, uint8_t VAL)
+{
+	uint8_t tx_data[2];
+
+	tx_data[0] = REG;
+	tx_data[1] = VAL;
+
+
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+	HAL_SPI_Transmit(&hspi1, (uint8_t *)tx_data, 2, 100);
+	//HAL_SPI_Transmit(&hspi1, (uint8_t *)&VAL, 1, 100);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+}
+
+void osc_read_register(uint8_t REG, char NAME[20])
+{
+	uint8_t tx_data[2];
+	uint8_t rx_data[2];
+
+	tx_data[0] = REG;
+	tx_data[1] = 0;
+	rx_data[0] = 0;
+	rx_data[1] = 0;
+
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+	// HAL_SPI_Transmit(&hspi1, (uint8_t *)&REG, 1, 100);
+	HAL_SPI_TransmitReceive(&hspi1, (uint8_t *)tx_data, rx_data, 2, 100);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+
+	uart_buf_len = sprintf(uart_buf, "%s Value: 0x%02x\r\n", NAME, (unsigned int)rx_data[1]);
+	HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+}
+
+void osc_init(void)
+{
+	/* Initiates register values in the oscillator */
+//	osc_write_to_register(W_REG1, VAL_REG1);
+//	osc_write_to_register(W_REG2, VAL_REG2);
+//	osc_write_to_register(W_REG4, VAL_REG4);
+//	osc_write_to_register(W_REG5, VAL_REG5);
+//	osc_write_to_register(W_REG6, VAL_REG6);
+//	osc_write_to_register(W_REG7, VAL_REG7);
+//	osc_write_to_register(W_REG8, VAL_REG8);
+	osc_write_to_register(W_REG9, VAL_REG9);
+//	osc_write_to_register(W_REGA, VAL_REGA);
+//	osc_write_to_register(W_REGB, VAL_REGB);
+//	osc_write_to_register(W_REGC, VAL_REGC);
+//	osc_write_to_register(W_REGD, VAL_REGD);
+//	osc_write_to_register(W_REG3, VAL_REG3); // autocal at the end of rest of registers
+
+}
 
 /* USER CODE END 4 */
 

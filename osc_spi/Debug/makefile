@@ -60,8 +60,8 @@ all: main-build
 main-build: osc_spi.elf secondary-outputs
 
 # Tool invocations
-osc_spi.elf osc_spi.map: $(OBJS) $(USER_OBJS) C:\Users\Tom\STM32CubeIDE\workspace_1.10.1\osc_spi\STM32L073RZTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "osc_spi.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"C:\Users\Tom\STM32CubeIDE\workspace_1.10.1\osc_spi\STM32L073RZTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="osc_spi.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+osc_spi.elf osc_spi.map: $(OBJS) $(USER_OBJS) C:\Users\David\Documents\University\Term\ECE\ 4A\ (Spring\ 2022)\ECE498\ -\ FYDP\MCU\ Code\osc_spi\STM32L073RZTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "osc_spi.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"C:\Users\David\Documents\University\Term\ECE 4A (Spring 2022)\ECE498 - FYDP\MCU Code\osc_spi\STM32L073RZTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="osc_spi.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
