@@ -37,9 +37,17 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-void osc_write_to_register(uint8_t REG, uint8_t VAL);
-void osc_read_register(uint8_t REG, char NAME[20]);
-void osc_init(void);
+
+// Functions for the Oscillator
+void osc_write_to_register(uint8_t REG, uint8_t VAL);	// Writes given value to given register
+void osc_read_register(uint8_t REG, char NAME[20]);		// Reads contents from the given register
+void osc_init();									// Initializes the oscillator's registers
+void osc_print_register_contents();
+
+// Functions for the ADC
+uint16_t ADC_output();
+float ADC_voltage(uint16_t adc_value);
+void ADC_print_output(uint16_t adc_value, float adc_voltage);
 
 /* USER CODE END PM */
 
@@ -54,12 +62,11 @@ UART_HandleTypeDef huart2;
 
 /* Global Constants ----------------------------------------------------------*/
 
-uint16_t raw_adc_value;
-char raw_adc_str[10];
+char raw_adc_str[10];		// string printed to Serial to see ADC values
 
-char spi_buf[20];
-int uart_buf_len;
-char uart_buf[50];
+char spi_buf[20];			// SPI buffer
+char uart_buf[50];			// UART Buffer
+int uart_buf_len;			// Stores UART buffer length
 
 /* Oscillator Registers ------------------------------------------------------*/
 
@@ -145,9 +152,10 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-//  char uart_buf[50];
-//  int uart_buf_len;
-  // char spi_buf[20];
+
+	uint16_t raw_adc_value;		// Output of the 12-bit ADC (range: 0 to 4096)
+	float adc_voltage; 			// In Volts
+
   for(int i=0; i<20; i++)
   {
 	  spi_buf[i] = 'a';
@@ -171,42 +179,16 @@ int main(void)
  // HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
   /* BEGIN OSCILLATOR SECTION -----------------------------------------------------*/
-   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET); // Should be high by default
 
   uart_buf_len = sprintf(uart_buf, "/* Oscillator Code ---------*/ \r\n");
   HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
   // Set oscillator initial values
   // osc_init();
-//  osc_write_to_register(W_REG1, VAL_REG1);
-//  osc_write_to_register(W_REG2, VAL_REG2);
-//  osc_write_to_register(W_REG3, VAL_REG3);
-//  osc_write_to_register(W_REG4, VAL_REG4);
-//  osc_write_to_register(W_REG5, VAL_REG5);
-//  osc_write_to_register(W_REG6, VAL_REG6);
-//  osc_write_to_register(W_REG7, VAL_REG7);
-//  osc_write_to_register(W_REG8, VAL_REG8);
-//  osc_write_to_register(W_REG9, VAL_REG9);
-//  osc_write_to_register(W_REGA, VAL_REGA);
-//  osc_write_to_register(W_REGB, VAL_REGB);
-//  osc_write_to_register(W_REGC, VAL_REGC);
-//  osc_write_to_register(W_REGD, VAL_REGD);
 
-//  // Read register values
-//  osc_read_register(R_REG0, "REG0");
-//  osc_read_register(R_REG1, "REG1");
-//  osc_read_register(R_REG2, "REG2");
-//  osc_read_register(R_REG3, "REG3");
-//  osc_read_register(R_REG4, "REG4");
-//  osc_read_register(R_REG5, "REG5");
-//  osc_read_register(R_REG6, "REG6");
-//  osc_read_register(R_REG7, "REG7");
-//  osc_read_register(R_REG8, "REG8");
-//  osc_read_register(R_REG9, "REG9");
-//  osc_read_register(R_REGA, "REGA");
-//  osc_read_register(R_REGB, "REGB");
-//  osc_read_register(R_REGC, "REGC");
-//  osc_read_register(R_REGD, "REGD");
+  // Read register values
+  // osc_print_register_contents();
+
 
   // HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
@@ -226,22 +208,14 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  // Set Pin High (For Testing - Delete Later)
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
-
 	  // Get ADC Value
-	  HAL_ADC_Start(&hadc);
-	  HAL_ADC_PollForConversion(&hadc, HAL_MAX_DELAY);
-	  raw_adc_value = HAL_ADC_GetValue(&hadc);
+	  raw_adc_value = ADC_output();
 
-	  // Set Pin Low (For Testing - Delete Later)
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+	  // Get the equivalent voltage
+	  adc_voltage = ADC_voltage(raw_adc_value);
 
-	  // Find the actual voltage (to compare)
-	  // Convert to string and print
-	  float adc_voltage = 1.0 * raw_adc_value/4096 * 3.3;
-	  sprintf(raw_adc_str, "%hu --> %f V\r\n", raw_adc_value, adc_voltage);
-	  HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
+	  // Print
+	  ADC_print_output(raw_adc_value, adc_voltage);
 
 	  // This is just a delay so that the serial monitor does not move too fast
 	  // This delay should be deleted later on, after testing
@@ -473,6 +447,11 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void osc_write_to_register(uint8_t REG, uint8_t VAL)
 {
+   /*
+	*  This function writes VAL to the contents of REG
+	*
+	*/
+
 	uint8_t tx_data[2];
 
 	tx_data[0] = REG;
@@ -486,6 +465,11 @@ void osc_write_to_register(uint8_t REG, uint8_t VAL)
 
 void osc_read_register(uint8_t REG, char NAME[20])
 {
+   /*
+	*  This function reads the contents of REG
+	*
+	*/
+
 	uint8_t tx_data[2];
 	uint8_t rx_data[2];
 
@@ -502,23 +486,88 @@ void osc_read_register(uint8_t REG, char NAME[20])
 	HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 }
 
-void osc_init(void)
+void osc_init()
 {
-	/* Initiates register values in the oscillator */
-//	osc_write_to_register(W_REG1, VAL_REG1);
-//	osc_write_to_register(W_REG2, VAL_REG2);
-//	osc_write_to_register(W_REG4, VAL_REG4);
-//	osc_write_to_register(W_REG5, VAL_REG5);
-//	osc_write_to_register(W_REG6, VAL_REG6);
-//	osc_write_to_register(W_REG7, VAL_REG7);
-//	osc_write_to_register(W_REG8, VAL_REG8);
-//	osc_write_to_register(W_REG9, VAL_REG9);
-//	osc_write_to_register(W_REGA, VAL_REGA);
-//	osc_write_to_register(W_REGB, VAL_REGB);
-//	osc_write_to_register(W_REGC, VAL_REGC);
-//	osc_write_to_register(W_REGD, VAL_REGD);
-//	osc_write_to_register(W_REG3, VAL_REG3); // autocal at the end of rest of registers
+   /*
+	*  This function initializes the register values of the oscillator
+	*
+	*/
 
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET); // Sets CS pin high
+
+	osc_write_to_register(W_REG1, VAL_REG1);
+	osc_write_to_register(W_REG2, VAL_REG2);
+	osc_write_to_register(W_REG4, VAL_REG4);
+	osc_write_to_register(W_REG5, VAL_REG5);
+	osc_write_to_register(W_REG6, VAL_REG6);
+	osc_write_to_register(W_REG7, VAL_REG7);
+	osc_write_to_register(W_REG8, VAL_REG8);
+	osc_write_to_register(W_REG9, VAL_REG9);
+	osc_write_to_register(W_REGA, VAL_REGA);
+	osc_write_to_register(W_REGB, VAL_REGB);
+	osc_write_to_register(W_REGC, VAL_REGC);
+	osc_write_to_register(W_REGD, VAL_REGD);
+	osc_write_to_register(W_REG3, VAL_REG3); // autocal at the end of rest of registers
+
+}
+
+void osc_print_register_contents()
+{
+   /*
+	*  This function prints the contents of ALL registers
+	*
+	*/
+
+	osc_read_register(R_REG0, "REG0");
+	osc_read_register(R_REG1, "REG1");
+	osc_read_register(R_REG2, "REG2");
+	osc_read_register(R_REG3, "REG3");
+	osc_read_register(R_REG4, "REG4");
+	osc_read_register(R_REG5, "REG5");
+	osc_read_register(R_REG6, "REG6");
+	osc_read_register(R_REG7, "REG7");
+	osc_read_register(R_REG8, "REG8");
+	osc_read_register(R_REG9, "REG9");
+	osc_read_register(R_REGA, "REGA");
+	osc_read_register(R_REGB, "REGB");
+	osc_read_register(R_REGC, "REGC");
+	osc_read_register(R_REGD, "REGD");
+}
+
+uint16_t ADC_output()
+{
+	/*
+	 *  This function returns the output of the ADC
+	 *  The output of the ADC ranges from 0 to 4096 since it has 12-bits of resolution
+	 *  V_REF = 3.3 Volts for our Nucleo board
+	 *
+	 */
+
+	 HAL_ADC_Start(&hadc);
+	 HAL_ADC_PollForConversion(&hadc, HAL_MAX_DELAY);
+	 return HAL_ADC_GetValue(&hadc);
+}
+
+float ADC_voltage(uint16_t adc_value)
+{
+   /*
+	*  This function returns the voltage corresponding to the ADC output value
+	*
+	*/
+
+	float voltage = 1.0 * adc_value/4096 * 3.3;
+	return voltage;
+}
+
+void ADC_print_output(uint16_t adc_value, float adc_voltage)
+{
+   /*
+	*  This function prints the ADC output and voltage
+	*
+	*/
+
+	sprintf(raw_adc_str, "ADC Reading: %hu --> Voltage: %f V\r\n", adc_value, adc_voltage);
+	HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
 }
 
 /* USER CODE END 4 */
