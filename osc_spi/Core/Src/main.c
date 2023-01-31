@@ -22,6 +22,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,11 +44,18 @@ void osc_init(void);
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc;
+
 SPI_HandleTypeDef hspi1;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
+/* Global Constants ----------------------------------------------------------*/
+
+uint16_t raw_adc_value;
+char raw_adc_str[10];
 
 char spi_buf[20];
 int uart_buf_len;
@@ -89,29 +98,19 @@ const uint8_t W_REGD = 0b00011010;
 const uint8_t W_REGE = 0b00011110;
 
 // Setting registers
-//const uint8_t VAL_REG2 = 0b00000100; // 4
-//const uint8_t VAL_REG4 = 0b01011110; //94
-//const uint8_t VAL_REG6 = 0x14;
-//const uint8_t VAL_REG7 = 81;
-//const uint8_t VAL_REG8 = 0x0A;
-//const uint8_t VAL_REG9 = 0x3D;
-//const uint8_t VAL_REGA = 0x70;
-//const uint8_t VAL_REGB = 26;
-//const uint8_t VAL_REGD = 0xE0;
-
 const uint8_t VAL_REG1 = 0x04;
 const uint8_t VAL_REG2 = 0x04;
 const uint8_t VAL_REG3 = 0x3F;
 const uint8_t VAL_REG4 = 0x57;
 const uint8_t VAL_REG5 = 0x11;
-const uint8_t VAL_REG6 = 0x18;
-const uint8_t VAL_REG7 = 40;
+const uint8_t VAL_REG6 = 0x10;
+const uint8_t VAL_REG7 = 80;
 const uint8_t VAL_REG8 = 0x3F;
 const uint8_t VAL_REG9 = 0xFF;
 const uint8_t VAL_REGA = 0xF0;
-const uint8_t VAL_REGB = 0x19;
-const uint8_t VAL_REGC = 0xBF;
-const uint8_t VAL_REGD = 0x00; //C0
+const uint8_t VAL_REGB = 0x1A;
+const uint8_t VAL_REGC = 0b10111111;
+const uint8_t VAL_REGD = 0b00000000;
 
 /* USER CODE END PV */
 
@@ -120,6 +119,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_ADC_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -165,10 +165,10 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_SPI1_Init();
+  MX_ADC_Init();
   /* USER CODE BEGIN 2 */
 
-  uart_buf_len = sprintf(uart_buf, "========== Begin Running Code ==========\r\n");
-  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+ // HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
   /* BEGIN OSCILLATOR SECTION -----------------------------------------------------*/
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET); // Should be high by default
@@ -178,81 +178,74 @@ int main(void)
 
   // Set oscillator initial values
   // osc_init();
-  osc_write_to_register(W_REG1, VAL_REG1);
-  osc_write_to_register(W_REG2, VAL_REG2);
-  osc_write_to_register(W_REG3, VAL_REG3);
-  osc_write_to_register(W_REG4, VAL_REG4);
-  osc_write_to_register(W_REG5, VAL_REG5);
-  osc_write_to_register(W_REG6, VAL_REG6);
-  osc_write_to_register(W_REG7, VAL_REG7);
-  osc_write_to_register(W_REG8, VAL_REG8);
-  osc_write_to_register(W_REG9, VAL_REG9);
-  osc_write_to_register(W_REGA, VAL_REGA);
-  osc_write_to_register(W_REGB, VAL_REGB);
-  osc_write_to_register(W_REGC, VAL_REGC);
-  osc_write_to_register(W_REGD, VAL_REGD);
+//  osc_write_to_register(W_REG1, VAL_REG1);
+//  osc_write_to_register(W_REG2, VAL_REG2);
+//  osc_write_to_register(W_REG3, VAL_REG3);
+//  osc_write_to_register(W_REG4, VAL_REG4);
+//  osc_write_to_register(W_REG5, VAL_REG5);
+//  osc_write_to_register(W_REG6, VAL_REG6);
+//  osc_write_to_register(W_REG7, VAL_REG7);
+//  osc_write_to_register(W_REG8, VAL_REG8);
+//  osc_write_to_register(W_REG9, VAL_REG9);
+//  osc_write_to_register(W_REGA, VAL_REGA);
+//  osc_write_to_register(W_REGB, VAL_REGB);
+//  osc_write_to_register(W_REGC, VAL_REGC);
+//  osc_write_to_register(W_REGD, VAL_REGD);
 
-  // Read register values
-  osc_read_register(R_REG0, "REG0");
-  osc_read_register(R_REG1, "REG1");
-  osc_read_register(R_REG2, "REG2");
-  osc_read_register(R_REG3, "REG3");
-  osc_read_register(R_REG4, "REG4");
-  osc_read_register(R_REG5, "REG5");
-  osc_read_register(R_REG6, "REG6");
-  osc_read_register(R_REG7, "REG7");
-  osc_read_register(R_REG8, "REG8");
-  osc_read_register(R_REG9, "REG9");
-  osc_read_register(R_REGA, "REGA");
-  osc_read_register(R_REGB, "REGB");
-  osc_read_register(R_REGC, "REGC");
-  osc_read_register(R_REGD, "REGD");
+//  // Read register values
+//  osc_read_register(R_REG0, "REG0");
+//  osc_read_register(R_REG1, "REG1");
+//  osc_read_register(R_REG2, "REG2");
+//  osc_read_register(R_REG3, "REG3");
+//  osc_read_register(R_REG4, "REG4");
+//  osc_read_register(R_REG5, "REG5");
+//  osc_read_register(R_REG6, "REG6");
+//  osc_read_register(R_REG7, "REG7");
+//  osc_read_register(R_REG8, "REG8");
+//  osc_read_register(R_REG9, "REG9");
+//  osc_read_register(R_REGA, "REGA");
+//  osc_read_register(R_REGB, "REGB");
+//  osc_read_register(R_REGC, "REGC");
+//  osc_read_register(R_REGD, "REGD");
 
-  uart_buf_len = sprintf(uart_buf, "=========== End Code Running ===========\r\n");
-  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+  // HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
   /* END OSCILLATOR SECTION -----------------------------------------------------*/
-
-  /* Scratch Work ---------------------------------------------------------------*/
-  /*
-   // read initial value
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-  HAL_SPI_Transmit(&hspi1, (uint8_t *)&R_REG2, 1, 100);
-  HAL_SPI_Receive(&hspi1, (uint8_t *)spi_buf, 1, 100);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-
-  uart_buf_len = sprintf(uart_buf, "REG2 Value: 0x%02x\r\n", (unsigned int)spi_buf[0]);
-  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
-  uart_buf_len = sprintf(uart_buf, "SPI Test end\r\n");
-  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
-
-  //write
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-  HAL_SPI_Transmit(&hspi1, (uint8_t *)&W_REG2, 1, 100);
-  HAL_SPI_Transmit(&hspi1, (uint8_t *)&VAL_REG2, 1, 100);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-
-  //read changed value
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-  HAL_SPI_Transmit(&hspi1, (uint8_t *)&R_REG2, 1, 100);
-  HAL_SPI_Receive(&hspi1, (uint8_t *)spi_buf, 1, 100);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-
-  uart_buf_len = sprintf(uart_buf, "REG2 Value: 0x%02x\r\n", (unsigned int)spi_buf[0]);
-  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
-
-   */
-  /* End Scratch Work -----------------------------------------------------------*/
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+  uart_buf_len = sprintf(uart_buf, "/* ADC Code ---------*/ \r\n");
+  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	  // Set Pin High (For Testing - Delete Later)
+	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
+
+	  // Get ADC Value
+	  HAL_ADC_Start(&hadc);
+	  HAL_ADC_PollForConversion(&hadc, HAL_MAX_DELAY);
+	  raw_adc_value = HAL_ADC_GetValue(&hadc);
+
+	  // Set Pin Low (For Testing - Delete Later)
+	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+
+	  // Find the actual voltage (to compare)
+	  // Convert to string and print
+	  float adc_voltage = 1.0 * raw_adc_value/4096 * 3.3;
+	  sprintf(raw_adc_str, "%hu --> %f V\r\n", raw_adc_value, adc_voltage);
+	  HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
+
+	  // This is just a delay so that the serial monitor does not move too fast
+	  // This delay should be deleted later on, after testing
+	  HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }
@@ -303,6 +296,62 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC_Init(void)
+{
+
+  /* USER CODE BEGIN ADC_Init 0 */
+
+  /* USER CODE END ADC_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC_Init 1 */
+
+  /* USER CODE END ADC_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc.Instance = ADC1;
+  hadc.Init.OversamplingMode = DISABLE;
+  hadc.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV1;
+  hadc.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc.Init.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
+  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc.Init.ContinuousConvMode = DISABLE;
+  hadc.Init.DiscontinuousConvMode = DISABLE;
+  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc.Init.DMAContinuousRequests = DISABLE;
+  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc.Init.LowPowerAutoWait = DISABLE;
+  hadc.Init.LowPowerFrequencyMode = ENABLE;
+  hadc.Init.LowPowerAutoPowerOff = DISABLE;
+  if (HAL_ADC_Init(&hadc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel to be converted.
+  */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC_Init 2 */
+
+  /* USER CODE END ADC_Init 2 */
+
 }
 
 /**
@@ -394,6 +443,9 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
@@ -401,6 +453,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA10 */
+  GPIO_InitStruct.Pin = GPIO_PIN_10;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB6 */
   GPIO_InitStruct.Pin = GPIO_PIN_6;
@@ -422,7 +481,6 @@ void osc_write_to_register(uint8_t REG, uint8_t VAL)
 
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
 	HAL_SPI_Transmit(&hspi1, (uint8_t *)tx_data, 2, 100);
-	//HAL_SPI_Transmit(&hspi1, (uint8_t *)&VAL, 1, 100);
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
 }
 
@@ -437,7 +495,6 @@ void osc_read_register(uint8_t REG, char NAME[20])
 	rx_data[1] = 0;
 
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-	// HAL_SPI_Transmit(&hspi1, (uint8_t *)&REG, 1, 100);
 	HAL_SPI_TransmitReceive(&hspi1, (uint8_t *)tx_data, rx_data, 2, 100);
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
 
@@ -455,7 +512,7 @@ void osc_init(void)
 //	osc_write_to_register(W_REG6, VAL_REG6);
 //	osc_write_to_register(W_REG7, VAL_REG7);
 //	osc_write_to_register(W_REG8, VAL_REG8);
-	osc_write_to_register(W_REG9, VAL_REG9);
+//	osc_write_to_register(W_REG9, VAL_REG9);
 //	osc_write_to_register(W_REGA, VAL_REGA);
 //	osc_write_to_register(W_REGB, VAL_REGB);
 //	osc_write_to_register(W_REGC, VAL_REGC);
