@@ -41,13 +41,15 @@
 // Functions for the Oscillator
 void osc_write_to_register(uint8_t REG, uint8_t VAL);	// Writes given value to given register
 void osc_read_register(uint8_t REG, char NAME[20]);		// Reads contents from the given register
-void osc_init();									// Initializes the oscillator's registers
+void osc_init();										// Initializes the oscillator's registers
+void osc_config_reg_values(int i);						// Configures oscillator values for the ADC sweep
 void osc_print_register_contents();
 
 // Functions for the ADC
 uint16_t ADC_output();
 float ADC_voltage(uint16_t adc_value);
 void ADC_print_output(uint16_t adc_value, float adc_voltage);
+void ADC_print_sweep(uint16_t *adc_values, float *adc_voltages, int size);
 
 /* USER CODE END PM */
 
@@ -208,17 +210,51 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
+	  /*** Sweep the Oscilator ***/
+
+	  // Fix RD[4:0]=12 and OD[2:0]=2
+	  // Increment ND[9:0] from 2035-2055 MHz at ~4MHz steps
+
+	  uint16_t raw_adc_values[5] = {0, 0, 0, 0, 0};
+	  uint16_t raw_adc_value_averages[5] = {0, 0, 0, 0, 0};
+	  float adc_voltages[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+
+	  // -------------- testing
+
 	  // Get ADC Value
-	  raw_adc_value = ADC_output();
+	  	  raw_adc_value = ADC_output();
 
-	  // Get the equivalent voltage
-	  adc_voltage = ADC_voltage(raw_adc_value);
+	  	  // Get the equivalent voltage
+	  	  adc_voltage = ADC_voltage(raw_adc_value);
 
-	  // Print
-	  ADC_print_output(raw_adc_value, adc_voltage);
+	  	  // Print
+	  	  ADC_print_output(raw_adc_value, adc_voltage);
+
+	 // ------------------
+
+//	  for (int i=0; i<5; i++)
+//	  {
+//		  osc_config_reg_values(i);
+//
+//		  // Take 5 samples, then take the average
+//		  for (int j=0; j<5; j++)
+//		  {
+//			  raw_adc_values[j] = ADC_output();
+//		  }
+//
+//		  raw_adc_value_averages[i] = (raw_adc_values[0] + raw_adc_values[1] +
+//				  raw_adc_values[2] + raw_adc_values[3] + raw_adc_values[4])/5;
+//
+//		  // Convert to voltage
+//		  adc_voltages[i] = ADC_voltage(raw_adc_value_averages[i]);
+//	  }
+
+	  // Print ADC swept values
+	  //ADC_print_sweep(raw_adc_value_averages, adc_voltages, 5);
 
 	  // This is just a delay so that the serial monitor does not move too fast
 	  // This delay should be deleted later on, after testing
+	  // ** When using the scope, make the delay small, like 1 or 10
 	  HAL_Delay(500);
   }
   /* USER CODE END 3 */
@@ -445,6 +481,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 void osc_write_to_register(uint8_t REG, uint8_t VAL)
 {
    /*
@@ -511,6 +548,26 @@ void osc_init()
 
 }
 
+void osc_config_reg_values(int i) {
+	switch(i) {
+		case 0:
+			// do something
+			break;
+		case 1:
+			// do something
+			break;
+		case 2:
+			// do something
+			break;
+		case 3:
+			// do something
+			break;
+		case 4:
+			// do something
+			break;
+	}
+}
+
 void osc_print_register_contents()
 {
    /*
@@ -568,6 +625,26 @@ void ADC_print_output(uint16_t adc_value, float adc_voltage)
 
 	sprintf(raw_adc_str, "ADC Reading: %hu --> Voltage: %f V\r\n", adc_value, adc_voltage);
 	HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
+}
+
+void ADC_print_sweep(uint16_t *adc_values, float *adc_voltages, int size)
+{
+   /*
+	* This function prints the swept values of the ADC across the oscillator
+	*
+	*/
+
+	sprintf(raw_adc_str, "--------------------------\r\n");
+	HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
+
+	int frequency_chunks[6] = {2035, 2039, 2043, 2047, 2051, 2055};
+
+	for (int i=0; i<size; i++)
+	{
+		sprintf(raw_adc_str, "%i - %i MHz --> ADC Reading: %hu --> Voltage: %f V\r\n",
+				frequency_chunks[i], frequency_chunks[i+1], adc_values[i], adc_voltages[i]);
+		HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
+	}
 }
 
 /* USER CODE END 4 */
