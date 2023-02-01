@@ -204,6 +204,12 @@ int main(void)
   uart_buf_len = sprintf(uart_buf, "/* ADC Code ---------*/ \r\n");
   HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
+  raw_adc_value = HAL_ADCEx_Calibration_Start(&hadc, ADC_SINGLE_ENDED);
+  if(raw_adc_value != HAL_OK)
+  {
+	  Error_Handler();
+  }
+
   while (1)
   {
     /* USER CODE END WHILE */
@@ -215,47 +221,34 @@ int main(void)
 	  // Fix RD[4:0]=12 and OD[2:0]=2
 	  // Increment ND[9:0] from 2035-2055 MHz at ~4MHz steps
 
-	  uint16_t raw_adc_values[5] = {0, 0, 0, 0, 0};
-	  uint16_t raw_adc_value_averages[5] = {0, 0, 0, 0, 0};
-	  float adc_voltages[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+	  uint16_t raw_adc_value_averages[5] = {0, 0, 0, 0, 0}; // readings from the ADC
+	  float adc_voltages[5] = {0.0, 0.0, 0.0, 0.0, 0.0};	// readings converted to voltages
 
-	  // -------------- testing
+	  for (int i=0; i<5; i++)
+	  {
+		  osc_config_reg_values(i);
 
-	  // Get ADC Value
-	  	  raw_adc_value = ADC_output();
+		  raw_adc_value = 0;
 
-	  	  // Get the equivalent voltage
-	  	  adc_voltage = ADC_voltage(raw_adc_value);
+		  // Take 5 samples, then take the average
+		  for (int j=0; j<5; j++)
+		  {
+			  raw_adc_value += ADC_output();
+		  }
 
-	  	  // Print
-	  	  ADC_print_output(raw_adc_value, adc_voltage);
+		  raw_adc_value_averages[i] = raw_adc_value/5;
 
-	 // ------------------
-
-//	  for (int i=0; i<5; i++)
-//	  {
-//		  osc_config_reg_values(i);
-//
-//		  // Take 5 samples, then take the average
-//		  for (int j=0; j<5; j++)
-//		  {
-//			  raw_adc_values[j] = ADC_output();
-//		  }
-//
-//		  raw_adc_value_averages[i] = (raw_adc_values[0] + raw_adc_values[1] +
-//				  raw_adc_values[2] + raw_adc_values[3] + raw_adc_values[4])/5;
-//
-//		  // Convert to voltage
-//		  adc_voltages[i] = ADC_voltage(raw_adc_value_averages[i]);
-//	  }
+		  // Convert to voltage
+		  adc_voltages[i] = ADC_voltage(raw_adc_value_averages[i]);
+	  }
 
 	  // Print ADC swept values
-	  //ADC_print_sweep(raw_adc_value_averages, adc_voltages, 5);
+	  ADC_print_sweep(raw_adc_value_averages, adc_voltages, 5);
 
 	  // This is just a delay so that the serial monitor does not move too fast
 	  // This delay should be deleted later on, after testing
 	  // ** When using the scope, make the delay small, like 1 or 10
-	  HAL_Delay(500);
+	  HAL_Delay(10000);
   }
   /* USER CODE END 3 */
 }
