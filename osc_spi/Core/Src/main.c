@@ -108,8 +108,8 @@ const uint8_t W_REGE = 0b00011110;
 
 // Setting registers
 const uint8_t VAL_REG1 = 0x04;
-const uint8_t VAL_REG2 = 0x04;
-const uint8_t VAL_REG3 = 0x3F;
+const uint8_t VAL_REG2 = 0x04; // previously 0x04
+const uint8_t VAL_REG3 = 0x3F; // previously 0x3F
 const uint8_t VAL_REG4 = 0x57;
 const uint8_t VAL_REG5 = 0x11;
 const uint8_t VAL_REG6 = 96;
@@ -186,7 +186,7 @@ int main(void)
   osc_init();
 
   // Read register values
-  // osc_print_register_contents();
+  osc_print_register_contents();
 
 
   // HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
@@ -201,8 +201,7 @@ int main(void)
   uart_buf_len = sprintf(uart_buf, "/* ADC Code ---------*/ \r\n");
   HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
-  uint16_t raw_adc_value;		// Output of the 12-bit ADC (range: 0 to 4096)
-  float adc_voltage = 0; 		// In Volts
+  uint16_t raw_adc_value = 0;		// Output of the 12-bit ADC (range: 0 to 4096)
 
   // Calibrate ADC
   raw_adc_value = HAL_ADCEx_Calibration_Start(&hadc, ADC_SINGLE_ENDED);
@@ -218,29 +217,29 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
 	  /*** Sweep the Oscilator ***/
+	  //HAL_ADC_Start(&hadc);
 
 	  // Fix RD[4:0]=12 and OD[2:0]=2
 	  // Increment ND[9:0] by 1 and starting at 488 to 536 go from 2035-2055 MHz at ~4.17MHz steps
 
-	  uint16_t ND = 488;
+	  uint16_t ND = 488;							// value of ND register
 	  uint16_t raw_adc_value_averages[49] = {0}; 	// readings from the ADC
+	  int num_adc_samples = 100;
 	  float adc_voltages[49] = {0.0};	 			// readings converted to voltages
-//	  sprintf(raw_adc_str, "--------------------------\r\n");
-//	  HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
 
 	  for (int i=0; i<49; i++)
 	  {
-		  osc_config_reg_values(ND);
+		  // osc_config_reg_values(ND);
 
 		  raw_adc_value = 0;
 
-		  // Take 5 samples, then take the average
-		  for (int j=0; j<5; j++)
+		  // Take 100 samples, then take the average
+		  for (int j=0; j<14; j++)
 		  {
 			  raw_adc_value += ADC_output();
 		  }
 
-		  raw_adc_value_averages[i] = raw_adc_value/5;
+		  raw_adc_value_averages[i] = raw_adc_value/14;
 
 		  // Convert to voltages
 		  adc_voltages[i] = ADC_voltage(raw_adc_value_averages[i]);
@@ -249,7 +248,7 @@ int main(void)
 	  }
 
 	  // Print ADC swept values
-	  // ADC_print_sweep(raw_adc_value_averages, adc_voltages, 49);
+	  ADC_print_sweep(raw_adc_value_averages, adc_voltages, 49);
 
 	  // This is just a delay so that the serial monitor does not move too fast
 	  // This delay should be deleted later on, after testing
@@ -636,14 +635,16 @@ void ADC_print_sweep(uint16_t *adc_values, float *adc_voltages, int size)
 	HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
 
 	float frequency = 2035.0;
+	int ND = 488;
 
 	for (int i=0; i<size; i++)
 	{
-		sprintf(raw_adc_str, "%f MHz --> ADC Reading: %hu --> Voltage: %f V\r\n",
-				frequency, adc_values[i], adc_voltages[i]);
+		sprintf(raw_adc_str, "ND=%i: %f MHz --> ADC Reading: %hu --> Voltage: %f V\r\n",
+				ND, frequency, adc_values[i], adc_voltages[i]);
 		HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
 
 		frequency += 4.17;
+		ND += 1;
 	}
 }
 
