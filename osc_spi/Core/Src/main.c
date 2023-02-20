@@ -205,7 +205,7 @@ int main(void)
   uint16_t raw_adc_value = 0;					// Output of the 12-bit ADC (range: 0 to 4096)
   uint16_t ND = 488;							// value of ND register
   float frequency = 2035; 						// in MHz
-  float RSBW = 4;								// in MHz
+  float RSBW = 0.5;								// in MHz
   int num_bins = (2235 - 2035)/RSBW - 1;		// =49 for 4MHz RSBW, =199 for 0.5MHz RSBW
   int num_samples = 100;						// Number of ADC samples for each bin
   int adc_samples = 0; 							// readings from the ADC
@@ -262,6 +262,7 @@ int main(void)
 	  // This is just a delay so that the serial monitor does not move too fast
 	  // This delay should be deleted later on, after testing
 	  // ** When using the scope, make the delay small, like 1 or 10
+	  // HAL_Delay(1);
   }
   /* USER CODE END 3 */
 }

@@ -6264,9 +6264,9 @@ int main(void)
   float frequency = 2035; 						// in MHz
  800311e:	4b82      	ldr	r3, [pc, #520]	; (8003328 <main+0x2a8>)
  8003120:	667b      	str	r3, [r7, #100]	; 0x64
-  float RSBW = 4;								// in MHz
- 8003122:	2381      	movs	r3, #129	; 0x81
- 8003124:	05db      	lsls	r3, r3, #23
+  float RSBW = 0.5;								// in MHz
+ 8003122:	23fc      	movs	r3, #252	; 0xfc
+ 8003124:	059b      	lsls	r3, r3, #22
  8003126:	657b      	str	r3, [r7, #84]	; 0x54
   int num_bins = (2235 - 2035)/RSBW - 1;		// =49 for 4MHz RSBW, =199 for 0.5MHz RSBW
  8003128:	6d79      	ldr	r1, [r7, #84]	; 0x54
