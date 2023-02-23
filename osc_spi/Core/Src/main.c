@@ -22,7 +22,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -43,15 +42,14 @@
 void osc_write_to_register(uint8_t REG, uint8_t VAL);	// Writes given value to given register
 void osc_read_register(uint8_t REG, char NAME[20]);		// Reads contents from the given register
 void osc_init();										// Initializes the oscillator's registers
-void osc_set_frequency_4MHz(uint16_t ND);				// Configures oscillator values for the ADC sweep
-void osc_set_frequency_0p5MHz(float frequency);
-void osc_print_register_contents();
+void osc_config_reg_values(uint16_t ND);				// Configures oscillator values for the ADC sweep
+void osc_print_register_contents();						// Print contents/values of all the registers
 
 // Functions for the ADC
 uint16_t ADC_output();
 float ADC_voltage(uint16_t adc_value);
 void ADC_print_output(uint16_t adc_value, float adc_voltage);
-void ADC_print_sweep(uint16_t *adc_average, float *adc_voltage, int num_bins, float RSBW);
+void ADC_print_sweep(int *adc_value, float *adc_voltage, int num_bins, uint16_t N, float f, float RSBW);
 
 /* USER CODE END PM */
 
@@ -66,15 +64,23 @@ UART_HandleTypeDef huart2;
 
 /* Global Constants ----------------------------------------------------------*/
 
+// For ADC
 char raw_adc_str[20];		// string printed to Serial to see ADC values
 
+// For SPI
 char spi_buf[20];			// SPI buffer
+
+// For UART Transmit/Receive
 char uart_buf[50];			// UART Buffer
 int uart_buf_len;			// Stores UART buffer length
 
-/* Oscillator Registers ------------------------------------------------------*/
+// For display app (Temp)
+uint16_t buffer[16];
+float data[6] = {-1, 0, 100, 3000, 5000, 1500};
 
-// READ
+/* Oscillator Register Globals */
+
+// Read Addresses
 const uint8_t R_REG0 = 0b00000001;
 const uint8_t R_REG1 = 0b00000011;
 const uint8_t R_REG2 = 0b00000101;
@@ -91,7 +97,7 @@ const uint8_t R_REGC = 0b00011001;
 const uint8_t R_REGD = 0b00011011;
 const uint8_t R_REGE = 0b00011111;
 
-// WRITE
+// Write Addresses
 const uint8_t W_REG0 = 0b00000000;
 const uint8_t W_REG1 = 0b00000010;
 const uint8_t W_REG2 = 0b00000100;
@@ -108,10 +114,10 @@ const uint8_t W_REGC = 0b00011000;
 const uint8_t W_REGD = 0b00011010;
 const uint8_t W_REGE = 0b00011110;
 
-// Setting registers
+// Register Values
 const uint8_t VAL_REG1 = 0x04;
-const uint8_t VAL_REG2 = 0x04; // previously 0x04
-const uint8_t VAL_REG3 = 0x3F; // previously 0x3F
+const uint8_t VAL_REG2 = 0x04;
+const uint8_t VAL_REG3 = 0x3F;
 const uint8_t VAL_REG4 = 0x57;
 const uint8_t VAL_REG5 = 0x11;
 const uint8_t VAL_REG6 = 96;
@@ -147,6 +153,8 @@ static void MX_ADC_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+
+	int testing = 0; 	// Boolean --> 0 == False, 1 == True
 
   /* USER CODE END 1 */
 
@@ -190,6 +198,9 @@ int main(void)
   // Read register values
   osc_print_register_contents();
 
+
+  // HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+
   /* END OSCILLATOR SECTION -----------------------------------------------------*/
 
   /* USER CODE END 2 */
@@ -202,25 +213,25 @@ int main(void)
   uart_buf_len = sprintf(uart_buf, "/* ADC Code ---------*/ \r\n");
   HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
-  uint16_t raw_adc_value = 0;					// Output of the 12-bit ADC (range: 0 to 4096)
-  uint16_t ND = 488;							// value of ND register
-  float frequency = 2035; 						// in MHz
-  float RSBW = 0.5;								// in MHz
-  int num_bins = (2235 - 2035)/RSBW - 1;		// =49 for 4MHz RSBW, =199 for 0.5MHz RSBW
-  int num_samples = 100;						// Number of ADC samples for each bin
-  int adc_samples = 0; 							// readings from the ADC
-  uint16_t adc_average[num_bins]; 				// averages of ADC readings
-  float adc_voltage[num_bins];	 				// readings converted to voltages
+  int f_L = 2058; 							// [MHz]
+  float RSBW = 4.17; 						// Resolution Bandwidth
+  int num_bins = 36; 						// Number of bins or "chunks"
+  uint16_t N = 494;							// Value of ND[]
+  int num_samples = 100; 					// Number of ADC samples
+  int adc_value;							// Output of the 12-bit ADC (range: 0 to 4095)
+  int adc_average[num_bins]; 				// Average of ADC Readings
+  float adc_voltage[num_bins];				// Equivalent voltage of ADC Readings
 
   // Initialize arrays
-  for (int i=0; i<num_bins; i++) {
-	  adc_average[i] = 0;
-	  adc_voltage[i] = 0.0;
+  for (int i=0; i<num_bins; i++)
+  {
+     adc_average[i] = 0;
+     adc_voltage[i] = 0.0;
   }
 
   // Calibrate ADC
-  raw_adc_value = HAL_ADCEx_Calibration_Start(&hadc, ADC_SINGLE_ENDED);
-  if(raw_adc_value != HAL_OK)
+  adc_value = HAL_ADCEx_Calibration_Start(&hadc, ADC_SINGLE_ENDED);
+  if(adc_value != HAL_OK)
   {
 	  Error_Handler();
   }
@@ -231,38 +242,34 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
+	  /*** Sweep the Oscillator ***/
+	  N = 494;
 
+	  // Sweep the Oscillator
 	  for (int i=0; i<num_bins; i++)
 	  {
-		  // osc_set_frequency_4MHz(ND);
-		  osc_set_frequency_0p5MHz(frequency);
+		  osc_config_reg_values(N);
+		  adc_value = 0;
+		  HAL_Delay(1);
 
-		  raw_adc_value = 0;
-		  adc_samples = 0;
+		  // Take samples and get the average
+	      for (int k=0; k<num_samples; k++)
+	      {
+	      	adc_value += (int)ADC_output();
+	      }
+	      adc_average[i] = adc_value/num_samples;
+	      adc_voltage[i] = ((float)adc_average[i]/4095)*3.3;
 
-		  // Get samples and take the average
-		  for (int j=0; j<num_samples; j++)
-		  {
-			  raw_adc_value = ADC_output();
-			  adc_samples += (int)raw_adc_value;
-		  }
-
-		  adc_average[i] = (uint16_t)(adc_samples/num_samples);
-
-		  // Convert to voltage
-		  adc_voltage[i] = ADC_voltage(adc_average[i]);
-
-		  ND += 1;
-		  frequency += RSBW;
+	      N += 1;
 	  }
 
 	  // Print ADC swept values
-	  ADC_print_sweep(adc_average, adc_voltage, num_bins, RSBW);
+	  ADC_print_sweep(adc_average, adc_voltage, num_bins, 494, f_L, RSBW);
 
 	  // This is just a delay so that the serial monitor does not move too fast
 	  // This delay should be deleted later on, after testing
 	  // ** When using the scope, make the delay small, like 1 or 10
-	  // HAL_Delay(1);
+	  // HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }
@@ -554,7 +561,7 @@ void osc_init()
 
 }
 
-void osc_set_frequency_4MHz(uint16_t ND) {
+void osc_config_reg_values(uint16_t ND) {
 	uint16_t VAL_REG6_16BITS = VAL_REG6;
 	uint8_t VAL_REG6_NEW = 0;
 	uint8_t VAL_REG7_NEW = 0;
@@ -573,45 +580,6 @@ void osc_set_frequency_4MHz(uint16_t ND) {
 
 	osc_write_to_register(W_REG6, VAL_REG6_NEW);
 	osc_write_to_register(W_REG7, VAL_REG7_NEW);
-}
-
-void osc_set_frequency_0p5MHz(float frequency) {
-
-	uint8_t VAL_REG6_NEW = VAL_REG6;
-	uint8_t VAL_REG7_NEW = VAL_REG7;
-	uint8_t VAL_REG8_NEW = VAL_REG8;
-	uint8_t VAL_REG9_NEW = VAL_REG9;
-	uint8_t VAL_REGA_NEW = VAL_REGA;
-
-	// 1) get N and F
-	// ( N + F ) = f_vco / f_pfd = ( 2 * f_rf ) / (100 / 12) where all frequencies are in MHz
-	float NplusF = (2 * frequency) / (100/12);
-	uint16_t N = (uint16_t)NplusF;
-	float F = NplusF - N;
-	uint32_t NUM = F * pow(2, 18);
-
-	// 2) Extract NUM[17:12], NUM[11:4], and NUM[3:0]
-	uint8_t NUM_17to12 	= (NUM & (0b00000000000000111111000000000000)) >> 12;
-	uint8_t NUM_11to4 	= (NUM & (0b00000000000000000000111111110000)) >> 4;
-	uint8_t NUM_3to0 	= NUM & (0b00000000000000000000000000001111);
-
-	// 3) Extract ND[9:8] and ND[7:0]
-	uint8_t ND_9to8 = N >> 8;
-	uint8_t ND_7to0 = N & (0b0000000011111111);
-
-	// 4) Set new register values
-	VAL_REG6_NEW = (VAL_REG6 & (0b11111100)) | ND_9to8;
-	VAL_REG7_NEW = ND_7to0;
-	VAL_REG8_NEW = NUM_17to12;
-	VAL_REG9_NEW = NUM_11to4;
-	VAL_REGA_NEW = (VAL_REGA & (0b00001111)) | (NUM_3to0 << 4);
-
-	// Finally, write to registers with new values
-	osc_write_to_register(W_REG6, VAL_REG6_NEW);
-	osc_write_to_register(W_REG7, VAL_REG7_NEW);
-	osc_write_to_register(W_REG8, VAL_REG8_NEW);
-	osc_write_to_register(W_REG9, VAL_REG9_NEW);
-	osc_write_to_register(W_REGA, VAL_REGA_NEW);
 }
 
 void osc_print_register_contents()
@@ -658,7 +626,7 @@ float ADC_voltage(uint16_t adc_value)
 	*
 	*/
 
-	float voltage = 1.0 * adc_value/4095 * 3.3;
+	float voltage = 1.0 * adc_value/4096 * 3.3;
 	return voltage;
 }
 
@@ -673,7 +641,7 @@ void ADC_print_output(uint16_t adc_value, float adc_voltage)
 	HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
 }
 
-void ADC_print_sweep(uint16_t *adc_average, float *adc_voltage, int num_bins, float RSBW)
+void ADC_print_sweep(int *adc_value, float *adc_voltage, int num_bins, uint16_t N, float f, float RSBW)
 {
    /*
 	* This function prints the swept values of the ADC across the oscillator
@@ -683,15 +651,16 @@ void ADC_print_sweep(uint16_t *adc_average, float *adc_voltage, int num_bins, fl
 	sprintf(raw_adc_str, "--------------------------\r\n");
 	HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
 
-	float frequency = 2035.0;
+	float freq = f;
 
 	for (int i=0; i<num_bins; i++)
 	{
-		sprintf(raw_adc_str, "%f MHz --> ADC Reading: %hu --> Voltage: %f V\r\n",
-				frequency, adc_average[i], adc_voltage[i]);
+		sprintf(raw_adc_str, "ND=%i: %f MHz --> ADC Reading: %i --> Voltage: %f V\r\n",
+				N, freq, adc_value[i], adc_voltage[i]);
 		HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
 
-		frequency += RSBW;
+		freq += RSBW;
+		N += 1;
 	}
 }
 
