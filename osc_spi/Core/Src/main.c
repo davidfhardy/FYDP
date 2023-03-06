@@ -189,8 +189,8 @@ int main(void)
 
   /* BEGIN OSCILLATOR SECTION -----------------------------------------------------*/
 
-  uart_buf_len = sprintf(uart_buf, "/* Oscillator Code ---------*/ \r\n");
-  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+//  uart_buf_len = sprintf(uart_buf, "/* Oscillator Code ---------*/ \r\n");
+//  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
   // Set oscillator initial values
   osc_init();
@@ -210,31 +210,25 @@ int main(void)
 
   /* BEGIN ADC SECTION ---------------------------------------------------------*/
 
-  uart_buf_len = sprintf(uart_buf, "/* ADC Code ---------*/ \r\n");
-  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
+//  uart_buf_len = sprintf(uart_buf, "/* ADC Code ---------*/ \r\n");
+//  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
   int f_L = 2058; 							// [MHz]
   float RSBW = 4.17; 						// Resolution Bandwidth
   int num_bins = 36; 						// Number of bins or "chunks"
   uint16_t N = 494;							// Value of ND[]
   int num_samples = 100; 					// Number of ADC samples
-  int adc_value;							// Output of the 12-bit ADC (range: 0 to 4095)
-  int adc_average[num_bins]; 				// Average of ADC Readings
-  float adc_voltage[num_bins];				// Equivalent voltage of ADC Readings
+  int adc_value = 0;						// Output of the 12-bit ADC (range: 0 to 4095)
+  int adc_average[num_bins+1]; 				// Average of ADC Readings
 
   // Initialize arrays
-  for (int i=0; i<num_bins; i++)
+  for (int i=0; i<num_bins+1; i++)
   {
-     adc_average[i] = 0;
-     adc_voltage[i] = 0.0;
+     adc_average[i] = (i==0)? -1 : 0;
   }
 
   // Calibrate ADC
-  adc_value = HAL_ADCEx_Calibration_Start(&hadc, ADC_SINGLE_ENDED);
-  if(adc_value != HAL_OK)
-  {
-	  Error_Handler();
-  }
+  while(HAL_ADCEx_Calibration_Start(&hadc, ADC_SINGLE_ENDED) != HAL_OK);
 
   while (1)
   {
@@ -246,7 +240,7 @@ int main(void)
 	  N = 494;
 
 	  // Sweep the Oscillator
-	  for (int i=0; i<num_bins; i++)
+	  for (int i=1; i<num_bins+1; i++)
 	  {
 		  osc_config_reg_values(N);
 		  adc_value = 0;
@@ -255,16 +249,19 @@ int main(void)
 		  // Take samples and get the average
 	      for (int k=0; k<num_samples; k++)
 	      {
-	      	adc_value += (int)ADC_output();
+	      	 adc_value += (int)ADC_output();
 	      }
-	      adc_average[i] = adc_value/num_samples;
-	      adc_voltage[i] = ((float)adc_average[i]/4095)*3.3;
 
+	      adc_average[i] = adc_value/num_samples;
 	      N += 1;
 	  }
 
 	  // Print ADC swept values
-	  ADC_print_sweep(adc_average, adc_voltage, num_bins, 494, f_L, RSBW);
+	  for (int k=0; k<num_bins+1; k++)
+	  {
+		  sprintf(raw_adc_str, "%i\r\n", adc_average[k]);
+		  HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
+	  }
 
 	  // This is just a delay so that the serial monitor does not move too fast
 	  // This delay should be deleted later on, after testing
@@ -575,9 +572,7 @@ void osc_config_reg_values(uint16_t ND) {
 	VAL_REG6_16BITS = VAL_REG6_16BITS & (0b0000000011111100);
 	VAL_REG6_NEW = VAL_REG6_16BITS | ND_9to8;
 
-//	sprintf(raw_adc_str, "ND=%hu, Test: %hu \r\n", ND, VAL_REG6_NEW);
-//	HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
-
+	// Write new values to registers
 	osc_write_to_register(W_REG6, VAL_REG6_NEW);
 	osc_write_to_register(W_REG7, VAL_REG7_NEW);
 }
