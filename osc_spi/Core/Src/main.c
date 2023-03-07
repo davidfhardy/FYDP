@@ -45,6 +45,10 @@ void osc_init();										// Initializes the oscillator's registers
 void osc_config_reg_values(uint16_t ND);				// Configures oscillator values for the ADC sweep
 void osc_print_register_contents();						// Print contents/values of all the registers
 
+// Functions for ToF
+int ToF_distance(uint8_t *i2c_buf);
+int ToF_temperature(uint8_t *i2c_buf);
+
 // Functions for the ADC
 uint16_t ADC_output();
 float ADC_voltage(uint16_t adc_value);
@@ -55,6 +59,8 @@ void ADC_print_sweep(int *adc_value, float *adc_voltage, int num_bins, uint16_t 
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc;
+
+I2C_HandleTypeDef hi2c1;
 
 SPI_HandleTypeDef hspi1;
 
@@ -74,9 +80,11 @@ char spi_buf[20];			// SPI buffer
 char uart_buf[50];			// UART Buffer
 int uart_buf_len;			// Stores UART buffer length
 
-// For display app (Temp)
-uint16_t buffer[16];
-float data[6] = {-1, 0, 100, 3000, 5000, 1500};
+// For ToF
+const uint8_t TFmini_ADDR_W = 0x10 << 1;
+const uint8_t TFmini_ADDR_R = 0b00100001;
+const uint8_t REG_DISTANCE = 0xDB;
+const uint8_t TOF_REQ_FRAME[5] = {0x5A,0x05,0x00,0x01,0x60};   // I2C CM command
 
 /* Oscillator Register Globals */
 
@@ -137,6 +145,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_ADC_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -153,9 +162,7 @@ static void MX_ADC_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
-	int testing = 0; 	// Boolean --> 0 == False, 1 == True
-
+	uint8_t i2c_buf[12];
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -183,9 +190,8 @@ int main(void)
   MX_USART2_UART_Init();
   MX_SPI1_Init();
   MX_ADC_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-
- // HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
   /* BEGIN OSCILLATOR SECTION -----------------------------------------------------*/
 
@@ -213,18 +219,19 @@ int main(void)
 //  uart_buf_len = sprintf(uart_buf, "/* ADC Code ---------*/ \r\n");
 //  HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, uart_buf_len, 100);
 
-  int f_L = 2058; 							// [MHz]
-  float RSBW = 4.17; 						// Resolution Bandwidth
   int num_bins = 36; 						// Number of bins or "chunks"
   uint16_t N = 494;							// Value of ND[]
   int num_samples = 100; 					// Number of ADC samples
   int adc_value = 0;						// Output of the 12-bit ADC (range: 0 to 4095)
-  int adc_average[num_bins+1]; 				// Average of ADC Readings
+  int data_buffer_size = num_bins + 3;
+  int data_buffer[data_buffer_size]; 		// Average of ADC Readings
 
   // Initialize arrays
-  for (int i=0; i<num_bins+1; i++)
+  for (int i=0; i<data_buffer_size; i++)
   {
-     adc_average[i] = (i==0)? -1 : 0;
+	  data_buffer[i] = (i==0)? -2 : 0;
+     // -2 is the identifier bit which tells the receiver over serial that (...)
+     // the beginning of the data buffer is being transmitter
   }
 
   // Calibrate ADC
@@ -236,11 +243,15 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
+	  /*** Get distance from ToF ***/
+	  data_buffer[1] = ToF_distance(i2c_buf);
+	  data_buffer[2] = ToF_temperature(i2c_buf);
+
 	  /*** Sweep the Oscillator ***/
 	  N = 494;
 
 	  // Sweep the Oscillator
-	  for (int i=1; i<num_bins+1; i++)
+	  for (int i=3; i<data_buffer_size; i++)
 	  {
 		  osc_config_reg_values(N);
 		  adc_value = 0;
@@ -252,14 +263,14 @@ int main(void)
 	      	 adc_value += (int)ADC_output();
 	      }
 
-	      adc_average[i] = adc_value/num_samples;
+	      data_buffer[i] = adc_value/num_samples;
 	      N += 1;
 	  }
 
 	  // Print ADC swept values
-	  for (int k=0; k<num_bins+1; k++)
+	  for (int k=0; k<data_buffer_size; k++)
 	  {
-		  sprintf(raw_adc_str, "%i\r\n", adc_average[k]);
+		  sprintf(raw_adc_str, "%i\r\n", data_buffer[k]);
 		  HAL_UART_Transmit(&huart2, (uint8_t *)raw_adc_str, strlen(raw_adc_str), 100);
 	  }
 
@@ -311,8 +322,9 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_I2C1;
   PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
+  PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -372,6 +384,54 @@ static void MX_ADC_Init(void)
   /* USER CODE BEGIN ADC_Init 2 */
 
   /* USER CODE END ADC_Init 2 */
+
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.Timing = 0x00000708;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
 
 }
 
@@ -598,6 +658,43 @@ void osc_print_register_contents()
 	osc_read_register(R_REGB, "REGB");
 	osc_read_register(R_REGC, "REGC");
 	osc_read_register(R_REGD, "REGD");
+}
+
+int ToF_distance(uint8_t *i2c_buf)
+{
+	HAL_StatusTypeDef ret;
+	i2c_buf[0] = REG_DISTANCE;
+	ret = HAL_I2C_Master_Transmit(&hi2c1, TFmini_ADDR_W, TOF_REQ_FRAME, 5, HAL_MAX_DELAY);
+
+	// Read 9 bytes from TFmini
+	ret = HAL_I2C_Master_Receive(&hi2c1, TFmini_ADDR_R, i2c_buf, 9, HAL_MAX_DELAY);
+
+	// Get distance
+	uint16_t d = i2c_buf[2] + (i2c_buf[3] << 8);
+
+	// if d = 0cm, change it to 1cm to not mess with our EIRP calculations
+	if (d == 0)
+	{
+		d = 1;
+	}
+
+	return ((int)d);
+}
+
+int ToF_temperature(uint8_t *i2c_buf)
+{
+	HAL_StatusTypeDef ret;
+	i2c_buf[0] = REG_DISTANCE;
+	ret = HAL_I2C_Master_Transmit(&hi2c1, TFmini_ADDR_W, TOF_REQ_FRAME, 5, HAL_MAX_DELAY);
+
+	// Read 9 bytes from TFmini
+	ret = HAL_I2C_Master_Receive(&hi2c1, TFmini_ADDR_R, i2c_buf, 9, HAL_MAX_DELAY);
+
+	// Get temperature
+	uint16_t temp = i2c_buf[ 6] + ( i2c_buf[ 7] << 8);
+	temp = ( temp >> 3) - 256;
+
+	return ((int)temp);
 }
 
 uint16_t ADC_output()
